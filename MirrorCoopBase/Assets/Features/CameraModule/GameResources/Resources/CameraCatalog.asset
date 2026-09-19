@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d571b38ae60932c18d5f0a4e7c1b9362, type: 3}
+  m_Name: CameraCatalog
+  m_EditorClassIdentifier: 
+  _startupCameraId: TPCamera
+  _defaultBlendSeconds: 0.45
+  _lookSensitivity: 0.18
+  _minPitch: -70
+  _maxPitch: 70
+  _invertY: 0
+  _fpCameraPrefab: {fileID: 1189232536859529701, guid: f47d66d69667c9242a8f1135e0c1ee32, type: 3}
+  _tpCameraPrefab: {fileID: 7386267856119321941, guid: e95aa210c0b374740be7e49bdbb25eec, type: 3}

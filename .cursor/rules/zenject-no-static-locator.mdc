@@ -1,0 +1,28 @@
+---
+description: Resolve runtime dependencies through Zenject, never static locators
+alwaysApply: true
+---
+
+# No static service access
+
+Runtime game code must receive dependencies through Zenject inject or constructor. Do not use static classes, `ProjectContext.Instance`, `TryResolve`, or `FindInOpenContainers` as a service locator.
+
+```csharp
+// BAD
+DiContainer projectContainer = ProjectContext.Instance.Container;
+T resolved = projectContainer.TryResolve<T>();
+
+// BAD
+public static class GameServices { public static IFoo Foo; }
+
+// GOOD — field on a Mirror/MonoBehaviour object (ZenAutoInjecter SearchHierarchy)
+[Inject]
+private CharacterInputBuffer _input;
+
+// GOOD — constructor on a bound service
+public GameCameraService(GameCameraModel model, CameraCatalog catalog) { }
+```
+
+Network player prefabs use `ZenAutoInjecter` with `SearchHierarchy` so scene/Global bindings inject. Do not set `ContainerSources.ProjectContext`.
+
+Allowed statics: `const` id/name holders (`CameraIds`, `SceneNames`), Unity `[MenuItem]` editor tools, and private static helpers that do not resolve services.

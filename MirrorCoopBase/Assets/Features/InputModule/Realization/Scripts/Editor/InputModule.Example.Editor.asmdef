@@ -1,0 +1,22 @@
+{
+    "name": "InputModule.Example.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:e72e6af06adf6b64cb51b57990ffca39",
+        "GUID:75469ad4d38634e559750d17036d5f7c",
+        "GUID:b7c4fe6cbf62bb14b9f8a36ebb2952a3"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "IncrementalSourceGenerator.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

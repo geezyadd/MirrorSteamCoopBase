@@ -1,0 +1,43 @@
+.button-item{
+    flex-direction: row;
+    flex-grow: 1;
+    flex-shrink: 0;
+    padding: 5px;
+    
+    color: white;
+    background-color: #2a2a2a;
+    
+    align-items: center;
+    display: flex;
+    
+    width: auto;
+    margin: 3px;
+}
+
+.sub-button-item{
+    flex-direction: row;
+    flex-grow: 1;
+    flex-shrink: 0;
+    padding: 5px;
+    padding-left: 60px;
+
+    color: white;
+    background-color: #2a2a2a;
+
+    align-items: center;
+    display: flex;
+
+    width: auto;
+    margin: 3px;
+}
+
+.header{
+    font-size: 15px;
+}
+
+.container{
+    /*align-items: flex-start;*/
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}

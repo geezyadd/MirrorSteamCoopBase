@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="CodeGenerationEditorStyles.uss" />
+    <ui:VisualElement name="GenerateCode" class="button-item">
+        <ui:Toggle name="toggle" />
+        <ui:Label tabindex="-1" text="Label" parse-escape-sequences="true" display-tooltip-when-elided="true" name="label" class="header" />
+    </ui:VisualElement>
+</ui:UXML>

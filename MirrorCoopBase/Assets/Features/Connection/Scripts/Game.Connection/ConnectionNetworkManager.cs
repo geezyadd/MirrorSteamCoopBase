@@ -582,6 +582,15 @@ namespace Game.Connection
             if (controller != null)
                 controller.enabled = false;
 
+            Rigidbody rigidbody = target.GetComponent<Rigidbody>();
+            if (rigidbody != null)
+            {
+                rigidbody.position = position;
+                rigidbody.rotation = rotation;
+                rigidbody.linearVelocity = Vector3.zero;
+                rigidbody.angularVelocity = Vector3.zero;
+            }
+
             target.SetPositionAndRotation(position, rotation);
 
             if (controller != null)

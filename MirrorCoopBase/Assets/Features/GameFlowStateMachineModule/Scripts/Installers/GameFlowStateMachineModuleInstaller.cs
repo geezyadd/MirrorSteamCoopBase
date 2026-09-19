@@ -7,6 +7,7 @@ namespace Features.GameFlowStateMachineModule.Scripts.Installers {
             Container.BindInterfacesAndSelfTo<GlobalGameFlowState>().AsSingle();
             Container.BindInterfacesAndSelfTo<MenuGameFlowState>().AsSingle();
             Container.BindInterfacesAndSelfTo<SessionGameFlowState>().AsSingle();
+            Container.Bind<GameFlowStateSceneMapper>().AsSingle();
             Container.BindInterfacesTo<GameFlowStateMachineService>().AsSingle();
             Container.BindInterfacesAndSelfTo<GameFlowSceneTransitionSystem>().AsSingle();
         }

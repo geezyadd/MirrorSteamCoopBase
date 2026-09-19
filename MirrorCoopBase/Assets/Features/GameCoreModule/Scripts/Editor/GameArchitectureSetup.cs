@@ -2,12 +2,14 @@
 using System.IO;
 using Features.AddressablesConstantsGenerator.Generated;
 using Features.BootstrapersModule.Scripts;
+using Features.CameraModule.Scripts;
 using Features.GameCoreModule.Scripts.Constants;
 using Features.GameCoreModule.Scripts.Installers;
 using Features.LobbyModule.Scripts;
 using Features.MenuModule.Scripts;
 using Features.MvpModule;
-using Features.PlayerModule.Scripts;
+using Features.CharacterMovableModule.Scripts;
+using Features.FloatingControllerModule;
 using Game.Connection;
 using Mirror;
 using Mirror.FizzySteam;
@@ -28,10 +30,17 @@ namespace Features.GameCoreModule.Scripts.Editor {
         private const string ResourcesRoot = GameResourcesRoot + "/Resources";
         private const string LobbyPrefabsRoot = FeaturesRoot + "/LobbyModule/GameResources/Prefabs";
         private const string PlayerPrefabsRoot = FeaturesRoot + "/PlayerModule/GameResources/Prefabs";
+        private const string CameraModuleRoot = FeaturesRoot + "/CameraModule";
+        private const string CameraPrefabsRoot = CameraModuleRoot + "/GameResources/Prefabs";
+        private const string CameraResourcesRoot = CameraModuleRoot + "/GameResources/Resources";
+        private const string CameraCatalogPath = CameraResourcesRoot + "/CameraCatalog.asset";
+        private const string FpCameraPrefabPath = CameraPrefabsRoot + "/FPCamera.prefab";
+        private const string TpCameraPrefabPath = CameraPrefabsRoot + "/TPCamera.prefab";
         private const string MenuPrefabsRoot = FeaturesRoot + "/MenuModule/GameResources/Prefabs";
         private const string ConfigsRoot = FeaturesRoot + "/Connection/GameResources/Configurations";
         private const string ProjectContextPath = ResourcesRoot + "/ProjectContext.prefab";
         private const string PlayerPrefabPath = PlayerPrefabsRoot + "/Player.prefab";
+        private const string DummyPlayerPrefabPath = PlayerPrefabsRoot + "/DummyPlayer.prefab";
         private const string LegacyLobbyPlayerPrefabPath = LobbyPrefabsRoot + "/LobbyPlayer.prefab";
         private const string ConnectionConfigPath = ConfigsRoot + "/ConnectionConfig_Default.asset";
         private const string MenuWindowPrefabPath = MenuPrefabsRoot + "/MenuWindow.prefab";
@@ -56,6 +65,7 @@ namespace Features.GameCoreModule.Scripts.Editor {
 
                 EnsureFolders();
                 CreateConnectionConfig();
+                EnsureCameraModuleAssets();
                 GameObject playerPrefab = CreatePlayerPrefab();
                 CreateBootstrapScene();
                 CreateGlobalScene(playerPrefab);
@@ -74,6 +84,7 @@ namespace Features.GameCoreModule.Scripts.Editor {
             EnsureFolders();
             CreateConnectionConfig();
             CreateProjectContext();
+            EnsureCameraModuleAssets();
             GameObject playerPrefab = CreatePlayerPrefab();
 
             CreateBootstrapScene();
@@ -102,6 +113,10 @@ namespace Features.GameCoreModule.Scripts.Editor {
             EnsureFolder(FeaturesRoot + "/PlayerModule");
             EnsureFolder(FeaturesRoot + "/PlayerModule/GameResources");
             EnsureFolder(PlayerPrefabsRoot);
+            EnsureFolder(CameraModuleRoot);
+            EnsureFolder(CameraModuleRoot + "/GameResources");
+            EnsureFolder(CameraPrefabsRoot);
+            EnsureFolder(CameraResourcesRoot);
             EnsureFolder(FeaturesRoot + "/MenuModule");
             EnsureFolder(FeaturesRoot + "/MenuModule/GameResources");
             EnsureFolder(MenuPrefabsRoot);
@@ -139,9 +154,17 @@ namespace Features.GameCoreModule.Scripts.Editor {
         }
 
         private static GameObject CreatePlayerPrefab() {
+            GameObject dummy = AssetDatabase.LoadAssetAtPath<GameObject>(DummyPlayerPrefabPath);
+            if (dummy != null) {
+                EnsurePlayerCameraRig(dummy);
+                return dummy;
+            }
+
             GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
-            if (existing != null)
+            if (existing != null) {
+                EnsurePlayerCameraRig(existing);
                 return existing;
+            }
 
             if (AssetDatabase.LoadAssetAtPath<GameObject>(LegacyLobbyPlayerPrefabPath) != null) {
                 EnsureFolder(PlayerPrefabsRoot);
@@ -156,22 +179,174 @@ namespace Features.GameCoreModule.Scripts.Editor {
 
             var player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             player.name = "Player";
-            Object.DestroyImmediate(player.GetComponent<CapsuleCollider>());
 
-            CharacterController characterController = player.AddComponent<CharacterController>();
-            characterController.height = 2f;
-            characterController.center = new Vector3(0f, 1f, 0f);
-            characterController.radius = 0.4f;
+            CapsuleCollider capsuleCollider = player.GetComponent<CapsuleCollider>();
+            capsuleCollider.height = 2f;
+            capsuleCollider.center = new Vector3(0f, 1f, 0f);
+            capsuleCollider.radius = 0.4f;
+
+            Rigidbody rigidbody = player.AddComponent<Rigidbody>();
+            rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+            rigidbody.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 
             player.AddComponent<NetworkIdentity>();
-            player.AddComponent<NetworkTransformReliable>();
-            player.AddComponent<PlayerMovement>();
-            player.AddComponent<PlayerLocalCameraFollow>();
+            NetworkRigidbodyUnreliable networkRigidbody = player.AddComponent<NetworkRigidbodyUnreliable>();
+            networkRigidbody.syncDirection = SyncDirection.ClientToServer;
+
+            CharacterMovable movable = player.AddComponent<CharacterMovable>();
+            movable.syncDirection = SyncDirection.ClientToServer;
+            CharacterMovableRegistrar registrar = player.AddComponent<CharacterMovableRegistrar>();
+            FloatingController floatingController = player.AddComponent<FloatingController>();
+            PlayerCameraAnchor cameraAnchor = player.AddComponent<PlayerCameraAnchor>();
+            ZenAutoInjecter autoInjecter = player.AddComponent<ZenAutoInjecter>();
+            autoInjecter.ContainerSource = ZenAutoInjecter.ContainerSources.SearchHierarchy;
+
+            SerializedObject movableSerialized = new SerializedObject(movable);
+            movableSerialized.FindProperty("_rb").objectReferenceValue = rigidbody;
+            movableSerialized.FindProperty("_capsuleCollider").objectReferenceValue = capsuleCollider;
+            movableSerialized.FindProperty("_floatingController").objectReferenceValue = floatingController;
+            movableSerialized.ApplyModifiedPropertiesWithoutUndo();
+
+            SerializedObject registrarSerialized = new SerializedObject(registrar);
+            registrarSerialized.FindProperty("_movable").objectReferenceValue = movable;
+            registrarSerialized.ApplyModifiedPropertiesWithoutUndo();
+
+            SerializedObject floatingSerialized = new SerializedObject(floatingController);
+            floatingSerialized.FindProperty("_rb").objectReferenceValue = rigidbody;
+            floatingSerialized.FindProperty("_capsuleCollider").objectReferenceValue = capsuleCollider;
+            floatingSerialized.ApplyModifiedPropertiesWithoutUndo();
+
+            AssignPlayerCameraAnchor(player, cameraAnchor);
 
             EnsureFolder(PlayerPrefabsRoot);
             PrefabUtility.SaveAsPrefabAsset(player, PlayerPrefabPath);
             Object.DestroyImmediate(player);
             return AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+        }
+
+        private static void EnsureCameraModuleAssets() {
+            EnsureFolder(CameraPrefabsRoot);
+            EnsureFolder(CameraResourcesRoot);
+
+            GameObject fpPrefab = CreateCinemachineCameraPrefab(FpCameraPrefabPath, CameraIds.FPCamera, GameCameraKind.FirstPerson);
+            GameObject tpPrefab = CreateCinemachineCameraPrefab(TpCameraPrefabPath, CameraIds.TPCamera, GameCameraKind.ThirdPerson);
+
+            CameraCatalog catalog = AssetDatabase.LoadAssetAtPath<CameraCatalog>(CameraCatalogPath);
+            if (catalog == null) {
+                catalog = ScriptableObject.CreateInstance<CameraCatalog>();
+                AssetDatabase.CreateAsset(catalog, CameraCatalogPath);
+            }
+
+            GameCamera fpCamera = fpPrefab != null ? fpPrefab.GetComponent<GameCamera>() : null;
+            GameCamera tpCamera = tpPrefab != null ? tpPrefab.GetComponent<GameCamera>() : null;
+            SerializedObject catalogSerialized = new SerializedObject(catalog);
+            SerializedProperty startup = catalogSerialized.FindProperty("_startupCameraId");
+            SerializedProperty blend = catalogSerialized.FindProperty("_defaultBlendSeconds");
+            SerializedProperty fpProperty = catalogSerialized.FindProperty("_fpCameraPrefab");
+            SerializedProperty tpProperty = catalogSerialized.FindProperty("_tpCameraPrefab");
+            bool catalogDirty =
+                startup.stringValue != CameraIds.TPCamera ||
+                Mathf.Approximately(blend.floatValue, 0.45f) == false ||
+                fpProperty.objectReferenceValue != fpCamera ||
+                tpProperty.objectReferenceValue != tpCamera;
+            if (catalogDirty == false)
+                return;
+
+            startup.stringValue = CameraIds.TPCamera;
+            blend.floatValue = 0.45f;
+            fpProperty.objectReferenceValue = fpCamera;
+            tpProperty.objectReferenceValue = tpCamera;
+            catalogSerialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(catalog);
+        }
+
+        private static GameObject CreateCinemachineCameraPrefab(string path, string id, GameCameraKind kind) {
+            GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (existing != null) {
+                bool needsRebuild = kind == GameCameraKind.ThirdPerson &&
+                    existing.GetComponent<Unity.Cinemachine.CinemachineRotationComposer>() != null;
+                if (needsRebuild == false)
+                    return existing;
+
+                AssetDatabase.DeleteAsset(path);
+            }
+
+            GameCamera camera = GameCamera.Create(id, kind, null);
+            GameObject created = camera.gameObject;
+            PrefabUtility.SaveAsPrefabAsset(created, path);
+            Object.DestroyImmediate(created);
+            return AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        }
+
+        private static void EnsurePlayerCameraRig(GameObject prefabAsset) {
+            if (prefabAsset == null)
+                return;
+
+            string path = AssetDatabase.GetAssetPath(prefabAsset);
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try {
+                bool dirty = false;
+                MonoBehaviour[] behaviours = root.GetComponents<MonoBehaviour>();
+                for (int i = 0; i < behaviours.Length; i++) {
+                    MonoBehaviour behaviour = behaviours[i];
+                    if (behaviour == null || behaviour.GetType().Name != "PlayerLocalCameraFollow")
+                        continue;
+
+                    Object.DestroyImmediate(behaviour);
+                    dirty = true;
+                }
+
+                PlayerCameraAnchor anchor = root.GetComponent<PlayerCameraAnchor>();
+                if (anchor == null) {
+                    anchor = root.AddComponent<PlayerCameraAnchor>();
+                    dirty = true;
+                }
+
+                if (root.transform.Find("CameraFollow") == null ||
+                    root.transform.Find("CameraLookAt") == null ||
+                    root.transform.Find("CameraEye") == null)
+                    dirty = true;
+
+                if (dirty == false)
+                    return;
+
+                AssignPlayerCameraAnchor(root, anchor);
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+            }
+            finally {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        private static void AssignPlayerCameraAnchor(GameObject player, PlayerCameraAnchor anchor) {
+            Transform follow = EnsureChild(player.transform, "CameraFollow", new Vector3(0f, 1.55f, 0f));
+            Transform lookAt = EnsureChild(player.transform, "CameraLookAt", new Vector3(0f, 1.4f, 0f));
+            Transform eye = EnsureChild(player.transform, "CameraEye", new Vector3(0f, 1.65f, 0f));
+
+            SerializedObject anchorSerialized = new SerializedObject(anchor);
+            anchorSerialized.FindProperty("_follow").objectReferenceValue = follow;
+            anchorSerialized.FindProperty("_lookAt").objectReferenceValue = lookAt;
+            anchorSerialized.FindProperty("_eye").objectReferenceValue = eye;
+            anchorSerialized.FindProperty("_startupCameraId").stringValue = CameraIds.TPCamera;
+            anchorSerialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static Transform EnsureChild(Transform parent, string childName, Vector3 localPosition) {
+            Transform existing = parent.Find(childName);
+            if (existing != null) {
+                existing.localPosition = localPosition;
+                return existing;
+            }
+
+            var child = new GameObject(childName);
+            child.transform.SetParent(parent, false);
+            child.transform.localPosition = localPosition;
+            child.transform.localRotation = Quaternion.identity;
+            return child.transform;
         }
 
         private static void CreateBootstrapScene() {
