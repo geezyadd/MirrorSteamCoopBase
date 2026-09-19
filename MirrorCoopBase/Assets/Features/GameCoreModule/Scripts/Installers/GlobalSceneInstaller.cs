@@ -7,6 +7,7 @@ namespace Features.GameCoreModule.Scripts.Installers {
         public override void InstallBindings() {
             GameFlowStateMachineModuleInstaller.Install(Container);
             ConnectionModuleInstaller.Install(Container);
+            WindowsModuleInstaller.Install(Container);
         }
     }
 }

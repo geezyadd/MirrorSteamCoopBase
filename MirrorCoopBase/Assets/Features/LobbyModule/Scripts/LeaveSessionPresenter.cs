@@ -2,52 +2,41 @@ using System;
 using System.Threading.Tasks;
 using Features.GameFlowStateMachineModule.Scripts;
 using Features.GameFlowStateMachineModule.Scripts.States;
+using Features.MvpModule;
 using Game.Connection;
 using UnityEngine;
-using UnityEngine.UI;
-using Zenject;
 
 namespace Features.LobbyModule.Scripts {
-    [RequireComponent(typeof(Button))]
-    public sealed class LeaveSessionButton : MonoBehaviour {
-        private IConnectionSessionService _connectionSession;
-        private IGameFlowStateMachineService _gameFlowStateMachine;
-        private Button _button;
+    public sealed class LeaveSessionPresenter : PresenterBehaviour<LeaveSessionViewBase> {
+        private readonly IConnectionSessionService _connectionSession;
+        private readonly IGameFlowStateMachineService _gameFlowStateMachine;
         private bool _isBusy;
 
-        [Inject]
-        private void Construct(
+        public LeaveSessionPresenter(
             IConnectionSessionService connectionSession,
             IGameFlowStateMachineService gameFlowStateMachine) {
             _connectionSession = connectionSession;
             _gameFlowStateMachine = gameFlowStateMachine;
         }
 
-        private void Awake() {
-            _button = GetComponent<Button>();
+        protected override void OnViewSet() {
+            View.OnLeaveClicked += OnLeaveClicked;
         }
 
-        private void OnEnable() {
-            if (_button != null)
-                _button.onClick.AddListener(OnClicked);
+        protected override void OnDisposed() {
+            View.OnLeaveClicked -= OnLeaveClicked;
         }
 
-        private void OnDisable() {
-            if (_button != null)
-                _button.onClick.RemoveListener(OnClicked);
-        }
-
-        private void OnClicked() {
+        void OnLeaveClicked() =>
             _ = LeaveAsync();
-        }
 
-        private async Task LeaveAsync() {
+        async Task LeaveAsync() {
             if (_isBusy)
                 return;
 
             _isBusy = true;
-            if (_button != null)
-                _button.interactable = false;
+            if (View != null && View.IsViewDisposed == false)
+                View.SetInteractable(false);
 
             try {
                 await _connectionSession.StopToMenuAsync();
@@ -58,8 +47,8 @@ namespace Features.LobbyModule.Scripts {
             }
             finally {
                 _isBusy = false;
-                if (_button != null)
-                    _button.interactable = true;
+                if (View != null && View.IsViewDisposed == false)
+                    View.SetInteractable(true);
             }
         }
     }

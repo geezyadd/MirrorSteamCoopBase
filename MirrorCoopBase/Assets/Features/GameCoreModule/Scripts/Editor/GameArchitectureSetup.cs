@@ -6,6 +6,7 @@ using Features.GameCoreModule.Scripts.Constants;
 using Features.GameCoreModule.Scripts.Installers;
 using Features.LobbyModule.Scripts;
 using Features.MenuModule.Scripts;
+using Features.MvpModule;
 using Game.Connection;
 using Mirror;
 using Mirror.FizzySteam;
@@ -14,8 +15,6 @@ using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Zenject;
@@ -27,13 +26,17 @@ namespace Features.GameCoreModule.Scripts.Editor {
         private const string ScenesRoot = GameResourcesRoot + "/Scenes";
         private const string ResourcesRoot = GameResourcesRoot + "/Resources";
         private const string LobbyPrefabsRoot = FeaturesRoot + "/LobbyModule/GameResources/Prefabs";
+        private const string MenuPrefabsRoot = FeaturesRoot + "/MenuModule/GameResources/Prefabs";
         private const string ConfigsRoot = FeaturesRoot + "/Connection/GameResources/Configurations";
         private const string ProjectContextPath = ResourcesRoot + "/ProjectContext.prefab";
         private const string PlayerPrefabPath = LobbyPrefabsRoot + "/LobbyPlayer.prefab";
         private const string ConnectionConfigPath = ConfigsRoot + "/ConnectionConfig_Default.asset";
+        private const string MenuWindowPrefabPath = MenuPrefabsRoot + "/MenuWindow.prefab";
+        private const string GameHudWindowPrefabPath = LobbyPrefabsRoot + "/GameHudWindow.prefab";
         private const string BootstrapScenePath = ScenesRoot + "/" + SceneNames.Bootstrap + ".unity";
         private const string ConfigurationsAddressableGroup = "Configurations";
         private const string LocalScenesAddressableGroup = "Scenes";
+        private const string WindowsAddressableGroup = "Windows";
 
         [InitializeOnLoadMethod]
         private static void AutoSetupIfMissing() {
@@ -50,6 +53,13 @@ namespace Features.GameCoreModule.Scripts.Editor {
 
                 EnsureFolders();
                 CreateConnectionConfig();
+                GameObject playerPrefab = CreatePlayerPrefab();
+                CreateBootstrapScene();
+                CreateGlobalScene(playerPrefab);
+                CreateMenuScene();
+                CreateLobbyScene();
+                CreateWindowPrefabs();
+                StripLegacySceneUi();
                 SetupAddressableScenesAndConfigs();
                 UpdateBuildSettings();
                 AssetDatabase.SaveAssets();
@@ -67,6 +77,8 @@ namespace Features.GameCoreModule.Scripts.Editor {
             CreateGlobalScene(playerPrefab);
             CreateMenuScene();
             CreateLobbyScene();
+            CreateWindowPrefabs();
+            StripLegacySceneUi();
             SetupAddressableScenesAndConfigs();
             UpdateBuildSettings();
 
@@ -84,6 +96,9 @@ namespace Features.GameCoreModule.Scripts.Editor {
             EnsureFolder(FeaturesRoot + "/LobbyModule");
             EnsureFolder(FeaturesRoot + "/LobbyModule/GameResources");
             EnsureFolder(LobbyPrefabsRoot);
+            EnsureFolder(FeaturesRoot + "/MenuModule");
+            EnsureFolder(FeaturesRoot + "/MenuModule/GameResources");
+            EnsureFolder(MenuPrefabsRoot);
             EnsureFolder(FeaturesRoot + "/Connection");
             EnsureFolder(FeaturesRoot + "/Connection/GameResources");
             EnsureFolder(ConfigsRoot);
@@ -221,28 +236,6 @@ namespace Features.GameCoreModule.Scripts.Editor {
                 new[] { SceneNames.GlobalContract });
             MenuSceneInstaller installer = contextObject.AddComponent<MenuSceneInstaller>();
             contextObject.GetComponent<SceneContext>().Installers = new MonoInstaller[] { installer };
-
-            CreateEventSystem(scene);
-            GameObject canvasObject = CreateCanvas(scene);
-            MenuSessionView view = canvasObject.AddComponent<MenuSessionView>();
-
-            GameObject panel = CreateUiPanel(canvasObject.transform, "Panel");
-            InputField addressInput = CreateInputField(panel.transform, "AddressInput", "localhost or Steam lobby id", new Vector2(0f, 80f));
-            Button hostButton = CreateButton(panel.transform, "HostButton", "Host", new Vector2(-120f, 20f));
-            Button joinButton = CreateButton(panel.transform, "JoinButton", "Join", new Vector2(-120f, -40f));
-            Button hostSteamButton = CreateButton(panel.transform, "HostSteamButton", "Host Steam", new Vector2(120f, 20f));
-            Button joinSteamButton = CreateButton(panel.transform, "JoinSteamButton", "Join Steam", new Vector2(120f, -40f));
-            Text statusText = CreateLabel(panel.transform, "StatusText", string.Empty, new Vector2(0f, -100f));
-
-            SerializedObject viewSerialized = new SerializedObject(view);
-            viewSerialized.FindProperty("_addressInput").objectReferenceValue = addressInput;
-            viewSerialized.FindProperty("_hostButton").objectReferenceValue = hostButton;
-            viewSerialized.FindProperty("_joinButton").objectReferenceValue = joinButton;
-            viewSerialized.FindProperty("_hostSteamButton").objectReferenceValue = hostSteamButton;
-            viewSerialized.FindProperty("_joinSteamButton").objectReferenceValue = joinSteamButton;
-            viewSerialized.FindProperty("_statusText").objectReferenceValue = statusText;
-            viewSerialized.ApplyModifiedPropertiesWithoutUndo();
-
             EditorSceneManager.SaveScene(scene, path);
         }
 
@@ -269,12 +262,6 @@ namespace Features.GameCoreModule.Scripts.Editor {
             spawnPointObject.transform.position = new Vector3(0f, 1f, 0f);
             SceneManager.MoveGameObjectToScene(spawnPointObject, scene);
             spawnPointObject.AddComponent<ConnectionSpawnPoint>();
-
-            CreateEventSystem(scene);
-            GameObject canvasObject = CreateCanvas(scene);
-            Button leaveButton = CreateButton(canvasObject.transform, "LeaveButton", "Leave", new Vector2(0f, 200f));
-            leaveButton.gameObject.AddComponent<LeaveSessionButton>();
-
             EditorSceneManager.SaveScene(scene, path);
         }
 
@@ -334,6 +321,127 @@ namespace Features.GameCoreModule.Scripts.Editor {
                 ScenesRoot + "/" + SceneNames.Lobby + ".unity",
                 SceneNames.Lobby,
                 LocalScenesAddressableGroup);
+
+            CreateWindowPrefabs();
+        }
+
+        private static void StripLegacySceneUi() {
+            StripSceneRootObjects(ScenesRoot + "/" + SceneNames.Menu + ".unity", "Canvas");
+            StripSceneRootObjects(ScenesRoot + "/" + SceneNames.Lobby + ".unity", "Canvas", "EventSystem");
+        }
+
+        private static void StripSceneRootObjects(string scenePath, params string[] rootNames) {
+            if (File.Exists(ToAbsolute(scenePath)) == false)
+                return;
+
+            Scene scene = default;
+            bool openedAdditive = false;
+            for (int i = 0; i < SceneManager.sceneCount; i++) {
+                Scene loaded = SceneManager.GetSceneAt(i);
+                if (loaded.path != scenePath)
+                    continue;
+
+                scene = loaded;
+                break;
+            }
+
+            if (scene.IsValid() == false) {
+                scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+                openedAdditive = true;
+            }
+
+            bool dirty = false;
+            foreach (GameObject root in scene.GetRootGameObjects()) {
+                bool isCanvas = root.GetComponent<Canvas>() != null;
+                bool nameMatches = false;
+                foreach (string rootName in rootNames) {
+                    if (root.name != rootName)
+                        continue;
+
+                    nameMatches = true;
+                    break;
+                }
+
+                if (isCanvas == false && nameMatches == false)
+                    continue;
+
+                Object.DestroyImmediate(root);
+                dirty = true;
+            }
+
+            if (dirty)
+                EditorSceneManager.SaveScene(scene);
+
+            if (openedAdditive)
+                EditorSceneManager.CloseScene(scene, true);
+        }
+
+        private static void CreateWindowPrefabs() {
+            CreateMenuWindowPrefab();
+            CreateGameHudWindowPrefab();
+        }
+
+        private static void CreateMenuWindowPrefab() {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(MenuWindowPrefabPath) != null) {
+                MarkAddressable(MenuWindowPrefabPath, nameof(MenuWindow), WindowsAddressableGroup);
+                return;
+            }
+
+            var root = new GameObject(nameof(MenuWindow), typeof(RectTransform));
+            StretchFullScreen(root.GetComponent<RectTransform>());
+            root.AddComponent<MonoWindowInstance>();
+
+            GameObject panel = CreateUiPanel(root.transform, "Panel");
+            MenuSessionView view = panel.AddComponent<MenuSessionView>();
+            InputField addressInput = CreateInputField(panel.transform, "AddressInput", "localhost or Steam lobby id", new Vector2(0f, 80f));
+            Button hostButton = CreateButton(panel.transform, "HostButton", "Host", new Vector2(-120f, 20f));
+            Button joinButton = CreateButton(panel.transform, "JoinButton", "Join", new Vector2(-120f, -40f));
+            Button hostSteamButton = CreateButton(panel.transform, "HostSteamButton", "Host Steam", new Vector2(120f, 20f));
+            Button joinSteamButton = CreateButton(panel.transform, "JoinSteamButton", "Join Steam", new Vector2(120f, -40f));
+            Text statusText = CreateLabel(panel.transform, "StatusText", string.Empty, new Vector2(0f, -100f));
+
+            SerializedObject viewSerialized = new SerializedObject(view);
+            viewSerialized.FindProperty("_addressInput").objectReferenceValue = addressInput;
+            viewSerialized.FindProperty("_hostButton").objectReferenceValue = hostButton;
+            viewSerialized.FindProperty("_joinButton").objectReferenceValue = joinButton;
+            viewSerialized.FindProperty("_hostSteamButton").objectReferenceValue = hostSteamButton;
+            viewSerialized.FindProperty("_joinSteamButton").objectReferenceValue = joinSteamButton;
+            viewSerialized.FindProperty("_statusText").objectReferenceValue = statusText;
+            viewSerialized.ApplyModifiedPropertiesWithoutUndo();
+
+            EnsureFolder(MenuPrefabsRoot);
+            PrefabUtility.SaveAsPrefabAsset(root, MenuWindowPrefabPath);
+            Object.DestroyImmediate(root);
+            MarkAddressable(MenuWindowPrefabPath, nameof(MenuWindow), WindowsAddressableGroup);
+        }
+
+        private static void CreateGameHudWindowPrefab() {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(GameHudWindowPrefabPath) != null) {
+                MarkAddressable(GameHudWindowPrefabPath, nameof(GameHudWindow), WindowsAddressableGroup);
+                return;
+            }
+
+            var root = new GameObject(nameof(GameHudWindow), typeof(RectTransform));
+            StretchFullScreen(root.GetComponent<RectTransform>());
+            root.AddComponent<MonoWindowInstance>();
+
+            Button leaveButton = CreateButton(root.transform, "LeaveButton", "Leave", new Vector2(0f, 200f));
+            LeaveSessionView leaveView = leaveButton.gameObject.AddComponent<LeaveSessionView>();
+            SerializedObject leaveSerialized = new SerializedObject(leaveView);
+            leaveSerialized.FindProperty("_button").objectReferenceValue = leaveButton;
+            leaveSerialized.ApplyModifiedPropertiesWithoutUndo();
+
+            EnsureFolder(LobbyPrefabsRoot);
+            PrefabUtility.SaveAsPrefabAsset(root, GameHudWindowPrefabPath);
+            Object.DestroyImmediate(root);
+            MarkAddressable(GameHudWindowPrefabPath, nameof(GameHudWindow), WindowsAddressableGroup);
+        }
+
+        private static void StretchFullScreen(RectTransform rect) {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
         }
 
         private static void MarkAddressable(string assetPath, string address, string groupName) {
@@ -365,23 +473,6 @@ namespace Features.GameCoreModule.Scripts.Editor {
             entry.SetAddress(address);
             EditorUtility.SetDirty(settings);
             EditorUtility.SetDirty(group);
-        }
-
-        private static void CreateEventSystem(Scene scene) {
-            var eventSystem = new GameObject("EventSystem");
-            SceneManager.MoveGameObjectToScene(eventSystem, scene);
-            eventSystem.AddComponent<EventSystem>();
-            eventSystem.AddComponent<InputSystemUIInputModule>();
-        }
-
-        private static GameObject CreateCanvas(Scene scene) {
-            var canvasObject = new GameObject("Canvas");
-            SceneManager.MoveGameObjectToScene(canvasObject, scene);
-            Canvas canvas = canvasObject.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvasObject.AddComponent<CanvasScaler>();
-            canvasObject.AddComponent<GraphicRaycaster>();
-            return canvasObject;
         }
 
         private static GameObject CreateUiPanel(Transform parent, string name) {
