@@ -1,8 +1,8 @@
 using Mirror;
 using UnityEngine;
 
-namespace Features.LobbyModule.Scripts {
-    public sealed class LobbyLocalCameraFollow : NetworkBehaviour {
+namespace Features.PlayerModule.Scripts {
+    public sealed class PlayerLocalCameraFollow : NetworkBehaviour {
         [SerializeField] private Vector3 offset = new Vector3(0f, 8f, -8f);
         [SerializeField] private float followSpeed = 10f;
 

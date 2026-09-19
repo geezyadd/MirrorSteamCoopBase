@@ -7,6 +7,7 @@ using Features.GameCoreModule.Scripts.Installers;
 using Features.LobbyModule.Scripts;
 using Features.MenuModule.Scripts;
 using Features.MvpModule;
+using Features.PlayerModule.Scripts;
 using Game.Connection;
 using Mirror;
 using Mirror.FizzySteam;
@@ -26,10 +27,12 @@ namespace Features.GameCoreModule.Scripts.Editor {
         private const string ScenesRoot = GameResourcesRoot + "/Scenes";
         private const string ResourcesRoot = GameResourcesRoot + "/Resources";
         private const string LobbyPrefabsRoot = FeaturesRoot + "/LobbyModule/GameResources/Prefabs";
+        private const string PlayerPrefabsRoot = FeaturesRoot + "/PlayerModule/GameResources/Prefabs";
         private const string MenuPrefabsRoot = FeaturesRoot + "/MenuModule/GameResources/Prefabs";
         private const string ConfigsRoot = FeaturesRoot + "/Connection/GameResources/Configurations";
         private const string ProjectContextPath = ResourcesRoot + "/ProjectContext.prefab";
-        private const string PlayerPrefabPath = LobbyPrefabsRoot + "/LobbyPlayer.prefab";
+        private const string PlayerPrefabPath = PlayerPrefabsRoot + "/Player.prefab";
+        private const string LegacyLobbyPlayerPrefabPath = LobbyPrefabsRoot + "/LobbyPlayer.prefab";
         private const string ConnectionConfigPath = ConfigsRoot + "/ConnectionConfig_Default.asset";
         private const string MenuWindowPrefabPath = MenuPrefabsRoot + "/MenuWindow.prefab";
         private const string GameHudWindowPrefabPath = LobbyPrefabsRoot + "/GameHudWindow.prefab";
@@ -96,6 +99,9 @@ namespace Features.GameCoreModule.Scripts.Editor {
             EnsureFolder(FeaturesRoot + "/LobbyModule");
             EnsureFolder(FeaturesRoot + "/LobbyModule/GameResources");
             EnsureFolder(LobbyPrefabsRoot);
+            EnsureFolder(FeaturesRoot + "/PlayerModule");
+            EnsureFolder(FeaturesRoot + "/PlayerModule/GameResources");
+            EnsureFolder(PlayerPrefabsRoot);
             EnsureFolder(FeaturesRoot + "/MenuModule");
             EnsureFolder(FeaturesRoot + "/MenuModule/GameResources");
             EnsureFolder(MenuPrefabsRoot);
@@ -137,8 +143,19 @@ namespace Features.GameCoreModule.Scripts.Editor {
             if (existing != null)
                 return existing;
 
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(LegacyLobbyPlayerPrefabPath) != null) {
+                EnsureFolder(PlayerPrefabsRoot);
+                AssetDatabase.MoveAsset(LegacyLobbyPlayerPrefabPath, PlayerPrefabPath);
+                GameObject moved = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+                if (moved != null) {
+                    moved.name = "Player";
+                    EditorUtility.SetDirty(moved);
+                    return moved;
+                }
+            }
+
             var player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            player.name = "LobbyPlayer";
+            player.name = "Player";
             Object.DestroyImmediate(player.GetComponent<CapsuleCollider>());
 
             CharacterController characterController = player.AddComponent<CharacterController>();
@@ -148,9 +165,10 @@ namespace Features.GameCoreModule.Scripts.Editor {
 
             player.AddComponent<NetworkIdentity>();
             player.AddComponent<NetworkTransformReliable>();
-            player.AddComponent<LobbyPlayerMovement>();
-            player.AddComponent<LobbyLocalCameraFollow>();
+            player.AddComponent<PlayerMovement>();
+            player.AddComponent<PlayerLocalCameraFollow>();
 
+            EnsureFolder(PlayerPrefabsRoot);
             PrefabUtility.SaveAsPrefabAsset(player, PlayerPrefabPath);
             Object.DestroyImmediate(player);
             return AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);

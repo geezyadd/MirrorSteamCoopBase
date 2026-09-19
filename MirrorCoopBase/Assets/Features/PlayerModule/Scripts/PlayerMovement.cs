@@ -2,8 +2,8 @@ using Mirror;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace Features.LobbyModule.Scripts {
-    public sealed class LobbyPlayerMovement : NetworkBehaviour {
+namespace Features.PlayerModule.Scripts {
+    public sealed class PlayerMovement : NetworkBehaviour {
         [SerializeField] private float moveSpeed = 5f;
         [SerializeField] private CharacterController characterController;
 
