@@ -1,0 +1,12 @@
+using Features.GameFlowStateMachineModule.Scripts;
+using Game.Connection;
+using Zenject;
+
+namespace Features.GameCoreModule.Scripts.Installers {
+    public sealed class DataInstaller : Installer<DataInstaller> {
+        public override void InstallBindings() {
+            Container.Bind<GameFlowStateLifecycleEventClass>().AsSingle();
+            Container.Bind<ConnectionSessionModel>().AsSingle();
+        }
+    }
+}

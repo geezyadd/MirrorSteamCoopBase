@@ -1,0 +1,19 @@
+---
+description: Bind all Zenject models only in DataInstaller
+globs: "**/{DataInstaller.cs,*Model.cs,*Installer.cs}"
+alwaysApply: true
+---
+
+# Models bind in DataInstaller
+
+All models are bound as `AsSingle()` only in `DataInstaller` (ProjectContext). Do not bind models in scene or module installers.
+
+```csharp
+// BAD — module/scene installer
+Container.Bind<ConnectionSessionModel>().AsSingle();
+
+// GOOD — DataInstaller
+Container.Bind<ConnectionSessionModel>().AsSingle();
+```
+
+Services, use cases, and facades stay in their module installers (for example `ConnectionModuleInstaller` in Global). A MonoBehaviour may register itself into a model; it must not bind the model.
