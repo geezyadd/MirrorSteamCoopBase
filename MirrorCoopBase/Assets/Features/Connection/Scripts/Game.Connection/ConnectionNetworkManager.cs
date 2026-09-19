@@ -37,6 +37,10 @@ namespace Game.Connection
         [Header("Map Change")]
         [SerializeField] float everyoneReadyDelay = 0.5f;
 
+        [Header("Transports")]
+        [SerializeField] Transport telepathyTransport;
+        [SerializeField] Transport fizzyTransport;
+
         ISceneLoaderService sceneLoader;
         ConnectionSessionModel sessionModel;
 
@@ -50,6 +54,7 @@ namespace Game.Connection
         public string MenuSceneName => menuSceneName;
         public bool IsMapLoaded { get; private set; }
         public bool IsChangingMap { get; private set; }
+        public bool UsesSteamTransport { get; private set; }
 
         public bool IsJoinable =>
             string.IsNullOrEmpty(networkSceneName) || networkSceneName == lobbySceneName;
@@ -80,9 +85,46 @@ namespace Game.Connection
 
         public override void Awake()
         {
+            ResolveTransports();
+            if (transport == null)
+                transport = telepathyTransport;
+
             offlineScene = string.Empty;
             onlineScene = string.Empty;
             base.Awake();
+        }
+
+        void ResolveTransports()
+        {
+            foreach (Transport candidate in GetComponents<Transport>())
+            {
+                if (candidate is TelepathyTransport telepathy)
+                    telepathyTransport = telepathy;
+                else
+                    fizzyTransport = candidate;
+            }
+
+            if (telepathyTransport != null)
+                telepathyTransport.enabled = UsesSteamTransport == false;
+            if (fizzyTransport != null)
+                fizzyTransport.enabled = UsesSteamTransport;
+        }
+
+        void ResetTransportIfIdle()
+        {
+            if (UsesSteamTransport == false)
+                return;
+            if (NetworkServer.active || NetworkClient.active)
+                return;
+
+            try
+            {
+                SetUseSteamTransport(false);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+            }
         }
 
         void OnEnable()
@@ -131,6 +173,7 @@ namespace Game.Connection
             HasSpawn = false;
             ServerStopped?.Invoke();
             base.OnStopServer();
+            ResetTransportIfIdle();
         }
 
         public override void OnStartClient()
@@ -168,6 +211,7 @@ namespace Game.Connection
             IsChangingMap = false;
             ClientStopped?.Invoke();
             base.OnStopClient();
+            ResetTransportIfIdle();
         }
 
         public override void OnServerConnect(NetworkConnectionToClient conn)
@@ -316,6 +360,26 @@ namespace Game.Connection
 
             conn.Send(new KickMessage());
             StartCoroutine(DisconnectAfterDelay(conn, 0.5f));
+        }
+
+        public void SetUseSteamTransport(bool useSteam)
+        {
+            Transport selected = useSteam ? fizzyTransport : telepathyTransport;
+            if (selected == null)
+            {
+                throw new InvalidOperationException(useSteam
+                    ? "FizzySteamworks transport is missing on ConnectionNetwork."
+                    : "Telepathy transport is missing on ConnectionNetwork.");
+            }
+
+            UsesSteamTransport = useSteam;
+            if (telepathyTransport != null)
+                telepathyTransport.enabled = useSteam == false;
+            if (fizzyTransport != null)
+                fizzyTransport.enabled = useSteam;
+
+            transport = selected;
+            Transport.active = selected;
         }
 
         public void StopSession()

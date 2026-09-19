@@ -6,6 +6,8 @@ namespace Game.Connection
     {
         Task HostAsync();
         Task JoinAsync(string address);
+        Task HostSteamAsync();
+        Task JoinSteamAsync(ulong lobbyId);
         Task StopToMenuAsync();
     }
 }

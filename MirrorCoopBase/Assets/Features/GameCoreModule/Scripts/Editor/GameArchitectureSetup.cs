@@ -8,6 +8,7 @@ using Features.LobbyModule.Scripts;
 using Features.MenuModule.Scripts;
 using Game.Connection;
 using Mirror;
+using Mirror.FizzySteam;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
@@ -167,6 +168,7 @@ namespace Features.GameCoreModule.Scripts.Editor {
             contextObject.AddComponent<GlobalSceneBootstrapper>();
 
             CreateConnectionObject(scene, playerPrefab);
+            CreateSteamManager(scene);
             EditorSceneManager.SaveScene(scene, path);
         }
 
@@ -175,6 +177,8 @@ namespace Features.GameCoreModule.Scripts.Editor {
             SceneManager.MoveGameObjectToScene(connectionObject, scene);
 
             TelepathyTransport transport = connectionObject.AddComponent<TelepathyTransport>();
+            FizzySteamworks fizzyTransport = connectionObject.AddComponent<FizzySteamworks>();
+            fizzyTransport.enabled = false;
             ConnectionAuthenticator authenticator = connectionObject.AddComponent<ConnectionAuthenticator>();
             ConnectionNetworkManager networkManager = connectionObject.AddComponent<ConnectionNetworkManager>();
 
@@ -184,6 +188,8 @@ namespace Features.GameCoreModule.Scripts.Editor {
             networkSerialized.FindProperty("offlineScene").stringValue = string.Empty;
             networkSerialized.FindProperty("onlineScene").stringValue = string.Empty;
             networkSerialized.FindProperty("transport").objectReferenceValue = transport;
+            networkSerialized.FindProperty("telepathyTransport").objectReferenceValue = transport;
+            networkSerialized.FindProperty("fizzyTransport").objectReferenceValue = fizzyTransport;
             networkSerialized.FindProperty("authenticator").objectReferenceValue = authenticator;
             networkSerialized.FindProperty("playerPrefab").objectReferenceValue = playerPrefab;
             networkSerialized.FindProperty("autoCreatePlayer").boolValue = true;
@@ -191,6 +197,15 @@ namespace Features.GameCoreModule.Scripts.Editor {
             networkSerialized.FindProperty("menuSceneName").stringValue = SceneNames.Menu;
             networkSerialized.FindProperty("persistentSceneName").stringValue = SceneNames.Global;
             networkSerialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void CreateSteamManager(Scene scene) {
+            if (UnityEngine.Object.FindFirstObjectByType<SteamManager>(FindObjectsInactive.Include) != null)
+                return;
+
+            var steamObject = new GameObject("SteamManager");
+            SceneManager.MoveGameObjectToScene(steamObject, scene);
+            steamObject.AddComponent<SteamManager>();
         }
 
         private static void CreateMenuScene() {
@@ -212,15 +227,19 @@ namespace Features.GameCoreModule.Scripts.Editor {
             MenuSessionView view = canvasObject.AddComponent<MenuSessionView>();
 
             GameObject panel = CreateUiPanel(canvasObject.transform, "Panel");
-            InputField addressInput = CreateInputField(panel.transform, "AddressInput", "localhost", new Vector2(0f, 80f));
-            Button hostButton = CreateButton(panel.transform, "HostButton", "Host", new Vector2(0f, 20f));
-            Button joinButton = CreateButton(panel.transform, "JoinButton", "Join", new Vector2(0f, -40f));
+            InputField addressInput = CreateInputField(panel.transform, "AddressInput", "localhost or Steam lobby id", new Vector2(0f, 80f));
+            Button hostButton = CreateButton(panel.transform, "HostButton", "Host", new Vector2(-120f, 20f));
+            Button joinButton = CreateButton(panel.transform, "JoinButton", "Join", new Vector2(-120f, -40f));
+            Button hostSteamButton = CreateButton(panel.transform, "HostSteamButton", "Host Steam", new Vector2(120f, 20f));
+            Button joinSteamButton = CreateButton(panel.transform, "JoinSteamButton", "Join Steam", new Vector2(120f, -40f));
             Text statusText = CreateLabel(panel.transform, "StatusText", string.Empty, new Vector2(0f, -100f));
 
             SerializedObject viewSerialized = new SerializedObject(view);
             viewSerialized.FindProperty("_addressInput").objectReferenceValue = addressInput;
             viewSerialized.FindProperty("_hostButton").objectReferenceValue = hostButton;
             viewSerialized.FindProperty("_joinButton").objectReferenceValue = joinButton;
+            viewSerialized.FindProperty("_hostSteamButton").objectReferenceValue = hostSteamButton;
+            viewSerialized.FindProperty("_joinSteamButton").objectReferenceValue = joinSteamButton;
             viewSerialized.FindProperty("_statusText").objectReferenceValue = statusText;
             viewSerialized.ApplyModifiedPropertiesWithoutUndo();
 

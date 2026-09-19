@@ -14,23 +14,30 @@ namespace Features.MenuModule.Scripts {
         [SerializeField] private InputField _addressInput;
         [SerializeField] private Button _hostButton;
         [SerializeField] private Button _joinButton;
+        [SerializeField] private Button _hostSteamButton;
+        [SerializeField] private Button _joinSteamButton;
         [SerializeField] private Text _statusText;
 
         private IConnectionSessionService _connectionSession;
+        private ISteamLobbyService _steamLobby;
         private IGameFlowStateMachineService _gameFlowStateMachine;
         private bool _isBusy;
 
         [Inject]
         private void Construct(
             IConnectionSessionService connectionSession,
+            ISteamLobbyService steamLobby,
             IGameFlowStateMachineService gameFlowStateMachine) {
             _connectionSession = connectionSession;
+            _steamLobby = steamLobby;
             _gameFlowStateMachine = gameFlowStateMachine;
         }
 
         private void Awake() {
             if (_hostButton == null || _joinButton == null)
                 BuildRuntimeUi();
+
+            EnsureSteamButtons();
         }
 
         private void OnEnable() {
@@ -38,6 +45,12 @@ namespace Features.MenuModule.Scripts {
                 _hostButton.onClick.AddListener(OnHostClicked);
             if (_joinButton != null)
                 _joinButton.onClick.AddListener(OnJoinClicked);
+            if (_hostSteamButton != null)
+                _hostSteamButton.onClick.AddListener(OnHostSteamClicked);
+            if (_joinSteamButton != null)
+                _joinSteamButton.onClick.AddListener(OnJoinSteamClicked);
+            if (_steamLobby != null)
+                _steamLobby.JoinRequested += OnSteamJoinRequested;
             SetStatus(string.Empty);
         }
 
@@ -46,6 +59,12 @@ namespace Features.MenuModule.Scripts {
                 _hostButton.onClick.RemoveListener(OnHostClicked);
             if (_joinButton != null)
                 _joinButton.onClick.RemoveListener(OnJoinClicked);
+            if (_hostSteamButton != null)
+                _hostSteamButton.onClick.RemoveListener(OnHostSteamClicked);
+            if (_joinSteamButton != null)
+                _joinSteamButton.onClick.RemoveListener(OnJoinSteamClicked);
+            if (_steamLobby != null)
+                _steamLobby.JoinRequested -= OnSteamJoinRequested;
         }
 
         private void OnHostClicked() =>
@@ -53,6 +72,15 @@ namespace Features.MenuModule.Scripts {
 
         private void OnJoinClicked() =>
             _ = RunAsync(JoinAsync);
+
+        private void OnHostSteamClicked() =>
+            _ = RunAsync(HostSteamAsync);
+
+        private void OnJoinSteamClicked() =>
+            _ = RunAsync(JoinSteamAsync);
+
+        private void OnSteamJoinRequested(ulong lobbyId) =>
+            _ = RunAsync(() => JoinSteamLobbyAsync(lobbyId));
 
         private async Task HostAsync() {
             await _gameFlowStateMachine.EnterAsync<SessionGameFlowState>();
@@ -62,6 +90,24 @@ namespace Features.MenuModule.Scripts {
         private async Task JoinAsync() {
             await _gameFlowStateMachine.EnterAsync<SessionGameFlowState>();
             await _connectionSession.JoinAsync(_addressInput != null ? _addressInput.text : "localhost");
+        }
+
+        private async Task HostSteamAsync() {
+            await _gameFlowStateMachine.EnterAsync<SessionGameFlowState>();
+            await _connectionSession.HostSteamAsync();
+        }
+
+        private async Task JoinSteamAsync() {
+            string text = _addressInput != null ? _addressInput.text : string.Empty;
+            if (ulong.TryParse(text.Trim(), out ulong lobbyId) == false)
+                throw new InvalidOperationException("Enter a Steam lobby id.");
+
+            await JoinSteamLobbyAsync(lobbyId);
+        }
+
+        private async Task JoinSteamLobbyAsync(ulong lobbyId) {
+            await _gameFlowStateMachine.EnterAsync<SessionGameFlowState>();
+            await _connectionSession.JoinSteamAsync(lobbyId);
         }
 
         private async Task RunAsync(Func<Task> operation) {
@@ -74,7 +120,10 @@ namespace Features.MenuModule.Scripts {
 
             try {
                 await operation();
-                SetStatus("Connected.");
+                if (_steamLobby != null && _steamLobby.CurrentLobbyId.HasValue)
+                    SetStatus($"Steam lobby {_steamLobby.CurrentLobbyId.Value}");
+                else
+                    SetStatus("Connected.");
             }
             catch (Exception exception) {
                 Debug.LogException(exception);
@@ -91,6 +140,10 @@ namespace Features.MenuModule.Scripts {
                 _hostButton.interactable = interactable;
             if (_joinButton != null)
                 _joinButton.interactable = interactable;
+            if (_hostSteamButton != null)
+                _hostSteamButton.interactable = interactable;
+            if (_joinSteamButton != null)
+                _joinSteamButton.interactable = interactable;
             if (_addressInput != null)
                 _addressInput.interactable = interactable;
         }
@@ -98,6 +151,14 @@ namespace Features.MenuModule.Scripts {
         private void SetStatus(string message) {
             if (_statusText != null)
                 _statusText.text = message ?? string.Empty;
+        }
+
+        private void EnsureSteamButtons() {
+            Transform panel = _hostButton != null ? _hostButton.transform.parent : transform;
+            if (_hostSteamButton == null)
+                _hostSteamButton = CreateButton(panel, "HostSteamButton", "Host Steam", new Vector2(0f, -160f));
+            if (_joinSteamButton == null)
+                _joinSteamButton = CreateButton(panel, "JoinSteamButton", "Join Steam", new Vector2(0f, -210f));
         }
 
         private void BuildRuntimeUi() {
@@ -113,11 +174,13 @@ namespace Features.MenuModule.Scripts {
 
             var panel = new GameObject("Panel", typeof(RectTransform));
             panel.transform.SetParent(transform, false);
-            panel.GetComponent<RectTransform>().sizeDelta = new Vector2(420f, 360f);
+            panel.GetComponent<RectTransform>().sizeDelta = new Vector2(720f, 360f);
 
-            _addressInput = CreateInputField(panel.transform, "AddressInput", "localhost", new Vector2(0f, 80f));
-            _hostButton = CreateButton(panel.transform, "HostButton", "Host", new Vector2(0f, 20f));
-            _joinButton = CreateButton(panel.transform, "JoinButton", "Join", new Vector2(0f, -40f));
+            _addressInput = CreateInputField(panel.transform, "AddressInput", "localhost or Steam lobby id", new Vector2(0f, 80f));
+            _hostButton = CreateButton(panel.transform, "HostButton", "Host", new Vector2(-120f, 20f));
+            _joinButton = CreateButton(panel.transform, "JoinButton", "Join", new Vector2(-120f, -40f));
+            _hostSteamButton = CreateButton(panel.transform, "HostSteamButton", "Host Steam", new Vector2(120f, 20f));
+            _joinSteamButton = CreateButton(panel.transform, "JoinSteamButton", "Join Steam", new Vector2(120f, -40f));
             _statusText = CreateLabel(panel.transform, "StatusText", string.Empty, new Vector2(0f, -100f));
         }
 

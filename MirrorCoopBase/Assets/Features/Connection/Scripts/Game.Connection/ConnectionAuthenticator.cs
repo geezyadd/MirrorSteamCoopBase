@@ -1,7 +1,7 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using Mirror;
+using Steamworks;
 using UnityEngine;
 
 namespace Game.Connection
@@ -11,6 +11,7 @@ namespace Game.Connection
     {
         public struct AuthRequestMessage : NetworkMessage
         {
+            public ulong steamId;
             public string playerName;
             public string version;
         }
@@ -61,6 +62,12 @@ namespace Game.Connection
             }
 
             ConnectionNetworkManager networkManager = NetworkManager.singleton as ConnectionNetworkManager;
+            if (networkManager != null && networkManager.UsesSteamTransport && ((CSteamID)msg.steamId).IsValid() == false)
+            {
+                Reject(conn, ConnectionRejectReason.InvalidSteamId);
+                return;
+            }
+
             if (networkManager != null && !networkManager.IsJoinable)
             {
                 Reject(conn, ConnectionRejectReason.MapAlreadyStarted);
@@ -102,9 +109,28 @@ namespace Game.Connection
 
         public override void OnClientAuthenticate()
         {
+            ulong steamId = 0;
+            string name = string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName;
+            try
+            {
+                CSteamID id = SteamUser.GetSteamID();
+                if (id.IsValid())
+                {
+                    steamId = id.m_SteamID;
+                    string personaName = SteamFriends.GetPersonaName();
+                    if (string.IsNullOrWhiteSpace(personaName) == false)
+                        name = personaName;
+                }
+            }
+            catch
+            {
+                // Direct IP still authenticates without Steam.
+            }
+
             NetworkClient.Send(new AuthRequestMessage
             {
-                playerName = string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName,
+                steamId = steamId,
+                playerName = name,
                 version = Application.version
             });
         }

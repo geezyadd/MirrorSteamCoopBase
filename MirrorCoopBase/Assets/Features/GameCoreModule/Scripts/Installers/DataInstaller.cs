@@ -7,6 +7,7 @@ namespace Features.GameCoreModule.Scripts.Installers {
         public override void InstallBindings() {
             Container.Bind<GameFlowStateLifecycleEventClass>().AsSingle();
             Container.Bind<ConnectionSessionModel>().AsSingle();
+            Container.Bind<SteamLobbyModel>().AsSingle();
         }
     }
 }

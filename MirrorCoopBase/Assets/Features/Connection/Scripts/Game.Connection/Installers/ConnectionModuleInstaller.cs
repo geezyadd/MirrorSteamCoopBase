@@ -7,6 +7,7 @@ namespace Game.Connection
         public override void InstallBindings()
         {
             Container.BindInterfacesTo<ConnectionSessionService>().AsSingle();
+            Container.BindInterfacesTo<SteamLobbyService>().AsSingle();
         }
     }
 }
