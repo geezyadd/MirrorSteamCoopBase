@@ -35,13 +35,6 @@ namespace Features.FloatingControllerModule {
         public LayerMask ProbeMask => _supportMask;
         public bool HoverEnabled { get; set; } = true;
 
-        private void Awake() {
-            if (_rb == null)
-                _rb = GetComponent<Rigidbody>();
-            if (_capsuleCollider == null)
-                _capsuleCollider = GetComponent<CapsuleCollider>();
-        }
-
         private void FixedUpdate() {
             if (isOwned == false)
                 return;

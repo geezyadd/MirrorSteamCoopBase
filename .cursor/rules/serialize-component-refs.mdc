@@ -1,0 +1,32 @@
+---
+description: Wire MonoBehaviour refs in the inspector, do not find or add them at runtime
+alwaysApply: true
+---
+
+# Serialize component references
+
+If a MonoBehaviour needs another component or transform on the same prefab/scene object, declare `[SerializeField]` and assign it in the inspector (or editor setup). Do not `GetComponent`, `AddComponent`, or `Find` in `Awake`/`Start` as a fallback.
+
+```csharp
+// BAD
+[SerializeField] private Rigidbody _rb;
+[SerializeField] private Outline _outline;
+
+private void Awake() {
+    if (_rb == null)
+        _rb = GetComponent<Rigidbody>();
+    if (_outline == null)
+        _outline = gameObject.AddComponent<Outline>();
+}
+
+// GOOD
+[SerializeField] private Rigidbody _rb;
+[SerializeField] private Outline _outline;
+```
+
+Allowed `GetComponent` / `AddComponent`:
+- a **one-time** lookup on another object (raycast hit, bind/spawn). Cache the result; never repeat it every frame
+- editor setup that **creates** prefabs/scenes
+- runtime factories that build a new object and then add its parts
+
+If a per-frame lookup seems unavoidable, ask first. See `no-getcomponent-in-update`.

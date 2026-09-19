@@ -9,6 +9,8 @@ namespace Features.InputModule.Realization.Scripts.Generated {
         public InputDefaultActions Sprint { get; set; }
         public InputDefaultActions SwitchCamera { get; set; }
         public InputVector2Actions Look { get; set; }
+        public InputDefaultActions Grab { get; set; }
+        public InputDefaultActions Release { get; set; }
         public void Enable();
         public void Disable();
         public void EnableMovementMap();

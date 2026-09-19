@@ -136,6 +136,24 @@ public partial class @InputActions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": true
+                },
+                {
+                    ""name"": ""Grab"",
+                    ""type"": ""Button"",
+                    ""id"": ""f718293a-4b5c-6d7e-8f90-1a2b3c4d5e70"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Release"",
+                    ""type"": ""Button"",
+                    ""id"": ""293a4b5c-6d7e-8f90-1a2b-3c4d5e6f7082"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -281,6 +299,28 @@ public partial class @InputActions: IInputActionCollection2, IDisposable
                     ""action"": ""Look"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""18293a4b-5c6d-7e8f-901a-2b3c4d5e6f71"",
+                    ""path"": ""<Keyboard>/e"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard and Mouse"",
+                    ""action"": ""Grab"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""3a4b5c6d-7e8f-901a-2b3c-4d5e6f708193"",
+                    ""path"": ""<Keyboard>/q"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard and Mouse"",
+                    ""action"": ""Release"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -305,6 +345,8 @@ public partial class @InputActions: IInputActionCollection2, IDisposable
         m_MovementMap_Sprint = m_MovementMap.FindAction("Sprint", throwIfNotFound: true);
         m_MovementMap_SwitchCamera = m_MovementMap.FindAction("SwitchCamera", throwIfNotFound: true);
         m_MovementMap_Look = m_MovementMap.FindAction("Look", throwIfNotFound: true);
+        m_MovementMap_Grab = m_MovementMap.FindAction("Grab", throwIfNotFound: true);
+        m_MovementMap_Release = m_MovementMap.FindAction("Release", throwIfNotFound: true);
     }
 
     ~@InputActions()
@@ -390,6 +432,8 @@ public partial class @InputActions: IInputActionCollection2, IDisposable
     private readonly InputAction m_MovementMap_Sprint;
     private readonly InputAction m_MovementMap_SwitchCamera;
     private readonly InputAction m_MovementMap_Look;
+    private readonly InputAction m_MovementMap_Grab;
+    private readonly InputAction m_MovementMap_Release;
     /// <summary>
     /// Provides access to input actions defined in input action map "MovementMap".
     /// </summary>
@@ -421,6 +465,14 @@ public partial class @InputActions: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "MovementMap/Look".
         /// </summary>
         public InputAction @Look => m_Wrapper.m_MovementMap_Look;
+        /// <summary>
+        /// Provides access to the underlying input action "MovementMap/Grab".
+        /// </summary>
+        public InputAction @Grab => m_Wrapper.m_MovementMap_Grab;
+        /// <summary>
+        /// Provides access to the underlying input action "MovementMap/Release".
+        /// </summary>
+        public InputAction @Release => m_Wrapper.m_MovementMap_Release;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -462,6 +514,12 @@ public partial class @InputActions: IInputActionCollection2, IDisposable
             @Look.started += instance.OnLook;
             @Look.performed += instance.OnLook;
             @Look.canceled += instance.OnLook;
+            @Grab.started += instance.OnGrab;
+            @Grab.performed += instance.OnGrab;
+            @Grab.canceled += instance.OnGrab;
+            @Release.started += instance.OnRelease;
+            @Release.performed += instance.OnRelease;
+            @Release.canceled += instance.OnRelease;
         }
 
         /// <summary>
@@ -488,6 +546,12 @@ public partial class @InputActions: IInputActionCollection2, IDisposable
             @Look.started -= instance.OnLook;
             @Look.performed -= instance.OnLook;
             @Look.canceled -= instance.OnLook;
+            @Grab.started -= instance.OnGrab;
+            @Grab.performed -= instance.OnGrab;
+            @Grab.canceled -= instance.OnGrab;
+            @Release.started -= instance.OnRelease;
+            @Release.performed -= instance.OnRelease;
+            @Release.canceled -= instance.OnRelease;
         }
 
         /// <summary>
@@ -589,5 +653,19 @@ public partial class @InputActions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnLook(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Grab" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnGrab(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Release" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnRelease(InputAction.CallbackContext context);
     }
 }

@@ -1,0 +1,37 @@
+---
+description: Do not GetComponent or Find every frame; cache and clear
+alwaysApply: true
+---
+
+# No GetComponent in Update
+
+Do not call `GetComponent`, `GetComponentInParent`, `GetComponentInChildren`, or `Find` from `Update`, `LateUpdate`, or `FixedUpdate`.
+
+If a one-time lookup on another object seems unavoidable, ask first. Do not add it silently.
+
+When a hold/hover/target starts, resolve once and cache. When it ends, clear the cache.
+
+```csharp
+// BAD — lookup every LateUpdate
+private void LateUpdate() {
+    if (TryGetArmPoint(_holderNetId, out Transform arm) == false)
+        return;
+}
+
+// GOOD — cache on bind, clear on release
+private Transform _armPoint;
+
+private void OnHolderChanged(uint previous, uint current) {
+    if (current == 0) {
+        _armPoint = null;
+        return;
+    }
+
+    _armPoint = ResolveArmPoint(current);
+}
+
+private void LateUpdate() {
+    if (_armPoint == null)
+        return;
+}
+```

@@ -16,14 +16,7 @@ namespace Features.CameraModule.Scripts {
         public string Id => _id;
         public GameCameraKind Kind => _kind;
 
-        public CinemachineCamera VirtualCamera {
-            get {
-                if (_virtualCamera == null)
-                    _virtualCamera = GetComponent<CinemachineCamera>();
-
-                return _virtualCamera;
-            }
-        }
+        public CinemachineCamera VirtualCamera => _virtualCamera;
 
         public static GameCamera Create(string id, GameCameraKind kind, Transform parent) {
             var gameObject = new GameObject(id);

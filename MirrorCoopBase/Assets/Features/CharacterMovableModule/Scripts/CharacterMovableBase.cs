@@ -16,7 +16,6 @@ namespace Features.CharacterMovableModule.Scripts {
             public float maxDrive = 250f;
             public float maxBrake = 800f;
             public bool cameraRelative = true;
-            public float turnDegreesPerSecond = 540f;
         }
 
         [System.Serializable]
@@ -35,6 +34,8 @@ namespace Features.CharacterMovableModule.Scripts {
         [SerializeField] private Rigidbody _rb;
         [SerializeField] private CapsuleCollider _capsuleCollider;
         [SerializeField] private FloatingController _floatingController;
+        [SerializeField] private Transform _rotatablePart;
+        [SerializeField] private float _lookTurnRate = 12f;
 
         [Header("Locomotion")]
         [SerializeField] private LocomotionTuning _locomotion = new();
@@ -47,6 +48,7 @@ namespace Features.CharacterMovableModule.Scripts {
         [SyncVar] private float _pushStrength;
         [SyncVar] private Vector3 _pushHeading;
         [SyncVar] private bool _locomoting;
+        [SyncVar] private float _facingYaw;
 
         private static readonly Collider[] OverlapScratch = new Collider[32];
 
@@ -70,12 +72,6 @@ namespace Features.CharacterMovableModule.Scripts {
         private bool ControlsSelf => isOwned;
 
         protected virtual void Awake() {
-            if (_rb == null)
-                _rb = GetComponent<Rigidbody>();
-            if (_capsuleCollider == null)
-                _capsuleCollider = GetComponent<CapsuleCollider>();
-            if (_floatingController == null)
-                _floatingController = GetComponent<FloatingController>();
             CacheWeight();
         }
 
@@ -102,6 +98,13 @@ namespace Features.CharacterMovableModule.Scripts {
             _jumpHeld = holdingJump;
         }
 
+        private void LateUpdate() {
+            if (ControlsSelf)
+                CaptureFacingYaw();
+
+            ApplyRotatableLook();
+        }
+
         private void FixedUpdate() {
             if (_rb == null)
                 return;
@@ -123,7 +126,6 @@ namespace Features.CharacterMovableModule.Scripts {
             Vector3 wish = ReadWishDirection();
             DrivePlanar(wish, planar);
             ApplyJumpAndAirGravity();
-            FacePlanar(wish);
         }
 
         private Vector3 ReadWishDirection() {
@@ -223,19 +225,6 @@ namespace Features.CharacterMovableModule.Scripts {
                 _rb.AddForce(_weight * extra);
         }
 
-        private void FacePlanar(Vector3 wish) {
-            if (wish.sqrMagnitude < 0.0001f)
-                return;
-
-            Vector3 flat = Vector3.ProjectOnPlane(wish, Vector3.up);
-            if (flat.sqrMagnitude < 0.0001f)
-                return;
-
-            Quaternion look = Quaternion.LookRotation(flat.normalized, Vector3.up);
-            Quaternion next = Quaternion.RotateTowards(_rb.rotation, look, _locomotion.turnDegreesPerSecond * Time.fixedDeltaTime);
-            _rb.MoveRotation(next);
-        }
-
         private void ShoveNearbyBodies() {
             if (_locomoting == false || _pushStrength < 0.01f || _capsuleCollider == null)
                 return;
@@ -275,6 +264,32 @@ namespace Features.CharacterMovableModule.Scripts {
                 if (other.linearVelocity.magnitude < impulse.magnitude)
                     other.AddForceAtPosition(impulse, contact);
             }
+        }
+
+        private void CaptureFacingYaw() {
+            Transform cameraTransform = Camera.main != null ? Camera.main.transform : null;
+            if (cameraTransform == null)
+                return;
+
+            Vector3 flat = cameraTransform.forward;
+            flat.y = 0f;
+            if (flat.sqrMagnitude < 0.0001f)
+                return;
+
+            float yaw = Quaternion.LookRotation(flat.normalized, Vector3.up).eulerAngles.y;
+            if (Mathf.Abs(Mathf.DeltaAngle(_facingYaw, yaw)) < 0.25f)
+                return;
+
+            _facingYaw = yaw;
+        }
+
+        private void ApplyRotatableLook() {
+            if (_rotatablePart == null)
+                return;
+
+            Quaternion target = Quaternion.Euler(0f, _facingYaw, 0f);
+            float t = 1f - Mathf.Exp(-_lookTurnRate * Time.deltaTime);
+            _rotatablePart.rotation = Quaternion.Slerp(_rotatablePart.rotation, target, t);
         }
 
         private static Vector3 CameraPlanar(Vector2 stick) {

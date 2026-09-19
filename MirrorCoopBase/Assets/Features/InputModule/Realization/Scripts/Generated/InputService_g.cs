@@ -14,6 +14,8 @@ namespace Features.InputModule.Realization.Scripts.Generated {
         public InputDefaultActions Sprint { get; set; } = new();
         public InputDefaultActions SwitchCamera { get; set; } = new();
         public InputVector2Actions Look { get; set; } = new();
+        public InputDefaultActions Grab { get; set; } = new();
+        public InputDefaultActions Release { get; set; } = new();
         public InputService(InputActions inputActions) {
             _inputActions = inputActions;
         }
@@ -84,6 +86,18 @@ namespace Features.InputModule.Realization.Scripts.Generated {
             if(context.started)Look.VectorChangedStarted?.Invoke(context.ReadValue<Vector2>());
             if(context.performed)Look.VectorChangedPerformed?.Invoke(context.ReadValue<Vector2>());
             if(context.canceled)Look.VectorChangedCanceled?.Invoke(context.ReadValue<Vector2>());
+        }
+        public void OnGrab(InputAction.CallbackContext context)
+         {
+            if(context.started)Grab.Started?.Invoke();
+            if(context.performed)Grab.Performed?.Invoke();
+            if(context.canceled)Grab.Canceled?.Invoke();
+        }
+        public void OnRelease(InputAction.CallbackContext context)
+         {
+            if(context.started)Release.Started?.Invoke();
+            if(context.performed)Release.Performed?.Invoke();
+            if(context.canceled)Release.Canceled?.Invoke();
         }
     }
 }

@@ -10,6 +10,7 @@ using Features.MenuModule.Scripts;
 using Features.MvpModule;
 using Features.CharacterMovableModule.Scripts;
 using Features.FloatingControllerModule;
+using Features.GrabModule.Scripts;
 using Game.Connection;
 using Mirror;
 using Mirror.FizzySteam;
@@ -36,6 +37,9 @@ namespace Features.GameCoreModule.Scripts.Editor {
         private const string CameraCatalogPath = CameraResourcesRoot + "/CameraCatalog.asset";
         private const string FpCameraPrefabPath = CameraPrefabsRoot + "/FPCamera.prefab";
         private const string TpCameraPrefabPath = CameraPrefabsRoot + "/TPCamera.prefab";
+        private const string GrabModuleRoot = FeaturesRoot + "/GrabModule";
+        private const string GrabPrefabsRoot = GrabModuleRoot + "/GameResources/Prefabs";
+        private const string DummyGrabbablePrefabPath = GrabPrefabsRoot + "/DummyGrabbable.prefab";
         private const string MenuPrefabsRoot = FeaturesRoot + "/MenuModule/GameResources/Prefabs";
         private const string ConfigsRoot = FeaturesRoot + "/Connection/GameResources/Configurations";
         private const string ProjectContextPath = ResourcesRoot + "/ProjectContext.prefab";
@@ -67,10 +71,12 @@ namespace Features.GameCoreModule.Scripts.Editor {
                 CreateConnectionConfig();
                 EnsureCameraModuleAssets();
                 GameObject playerPrefab = CreatePlayerPrefab();
+                EnsureGrabAssets(playerPrefab);
                 CreateBootstrapScene();
                 CreateGlobalScene(playerPrefab);
                 CreateMenuScene();
                 CreateLobbyScene();
+                EnsureLobbyGrabbable();
                 CreateWindowPrefabs();
                 StripLegacySceneUi();
                 SetupAddressableScenesAndConfigs();
@@ -86,11 +92,13 @@ namespace Features.GameCoreModule.Scripts.Editor {
             CreateProjectContext();
             EnsureCameraModuleAssets();
             GameObject playerPrefab = CreatePlayerPrefab();
+            EnsureGrabAssets(playerPrefab);
 
             CreateBootstrapScene();
             CreateGlobalScene(playerPrefab);
             CreateMenuScene();
             CreateLobbyScene();
+            EnsureLobbyGrabbable();
             CreateWindowPrefabs();
             StripLegacySceneUi();
             SetupAddressableScenesAndConfigs();
@@ -123,6 +131,9 @@ namespace Features.GameCoreModule.Scripts.Editor {
             EnsureFolder(FeaturesRoot + "/Connection");
             EnsureFolder(FeaturesRoot + "/Connection/GameResources");
             EnsureFolder(ConfigsRoot);
+            EnsureFolder(GrabModuleRoot);
+            EnsureFolder(GrabModuleRoot + "/GameResources");
+            EnsureFolder(GrabPrefabsRoot);
         }
 
         private static void EnsureFolder(string path) {
@@ -188,7 +199,7 @@ namespace Features.GameCoreModule.Scripts.Editor {
             Rigidbody rigidbody = player.AddComponent<Rigidbody>();
             rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
             rigidbody.collisionDetectionMode = CollisionDetectionMode.Continuous;
-            rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+            rigidbody.constraints = RigidbodyConstraints.FreezeRotation;
 
             player.AddComponent<NetworkIdentity>();
             NetworkRigidbodyUnreliable networkRigidbody = player.AddComponent<NetworkRigidbodyUnreliable>();
@@ -206,6 +217,9 @@ namespace Features.GameCoreModule.Scripts.Editor {
             movableSerialized.FindProperty("_rb").objectReferenceValue = rigidbody;
             movableSerialized.FindProperty("_capsuleCollider").objectReferenceValue = capsuleCollider;
             movableSerialized.FindProperty("_floatingController").objectReferenceValue = floatingController;
+            Transform rotatablePart = player.transform.Find("RotatablePart");
+            if (rotatablePart != null)
+                movableSerialized.FindProperty("_rotatablePart").objectReferenceValue = rotatablePart;
             movableSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             SerializedObject registrarSerialized = new SerializedObject(registrar);
@@ -218,6 +232,7 @@ namespace Features.GameCoreModule.Scripts.Editor {
             floatingSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             AssignPlayerCameraAnchor(player, cameraAnchor);
+            EnsurePlayerGrabController(player);
 
             EnsureFolder(PlayerPrefabsRoot);
             PrefabUtility.SaveAsPrefabAsset(player, PlayerPrefabPath);
@@ -320,6 +335,262 @@ namespace Features.GameCoreModule.Scripts.Editor {
             finally {
                 PrefabUtility.UnloadPrefabContents(root);
             }
+        }
+
+        private static void EnsureGrabAssets(GameObject playerPrefab) {
+            EnsureFolders();
+            EnsureInteractableLayer();
+            EnsurePlayerGrab(playerPrefab);
+            GameObject itemPrefab = EnsureDummyGrabbablePrefab();
+            RegisterSpawnPrefab(itemPrefab);
+            EnsureLobbyGrabbable(itemPrefab);
+        }
+
+        private static void EnsureInteractableLayer() {
+            UnityEngine.Object tagManager = AssetDatabase.LoadMainAssetAtPath("ProjectSettings/TagManager.asset");
+            if (tagManager == null)
+                return;
+
+            SerializedObject tags = new SerializedObject(tagManager);
+            SerializedProperty layers = tags.FindProperty("layers");
+            if (layers == null)
+                return;
+
+            for (int i = 0; i < layers.arraySize; i++) {
+                if (layers.GetArrayElementAtIndex(i).stringValue == InteractableLayers.Name)
+                    return;
+            }
+
+            for (int i = 8; i < layers.arraySize; i++) {
+                SerializedProperty layer = layers.GetArrayElementAtIndex(i);
+                if (string.IsNullOrEmpty(layer.stringValue) == false)
+                    continue;
+
+                layer.stringValue = InteractableLayers.Name;
+                tags.ApplyModifiedPropertiesWithoutUndo();
+                return;
+            }
+        }
+
+        private static void EnsurePlayerGrab(GameObject prefabAsset) {
+            if (prefabAsset == null)
+                return;
+
+            string path = AssetDatabase.GetAssetPath(prefabAsset);
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try {
+                if (EnsurePlayerGrabController(root) == false)
+                    return;
+
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+            }
+            finally {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        private static bool EnsurePlayerGrabController(GameObject player) {
+            Transform armPoint = FindNamedChild(player.transform, "ArmPoint");
+            if (armPoint == null)
+                armPoint = EnsureChild(player.transform, "ArmPoint", new Vector3(0.183f, 1.179f, 0.728f));
+
+            GrabController grab = player.GetComponent<GrabController>();
+            bool dirty = false;
+            if (grab == null) {
+                grab = player.AddComponent<GrabController>();
+                dirty = true;
+            }
+
+            int interactableBit = LayerMask.GetMask(InteractableLayers.Name);
+            SerializedObject serialized = new SerializedObject(grab);
+            SerializedProperty armProperty = serialized.FindProperty("_armPoint");
+            SerializedProperty maskProperty = serialized.FindProperty("_interactableMask");
+            SerializedProperty rangeProperty = serialized.FindProperty("_range");
+            if (armProperty.objectReferenceValue != armPoint) {
+                armProperty.objectReferenceValue = armPoint;
+                dirty = true;
+            }
+
+            if (maskProperty.intValue != interactableBit) {
+                maskProperty.intValue = interactableBit;
+                dirty = true;
+            }
+
+            if (Mathf.Approximately(rangeProperty.floatValue, 4f) == false) {
+                rangeProperty.floatValue = 4f;
+                dirty = true;
+            }
+
+            if (dirty)
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            return dirty;
+        }
+
+        private static Transform FindNamedChild(Transform parent, string childName) {
+            if (parent.name == childName)
+                return parent;
+
+            for (int i = 0; i < parent.childCount; i++) {
+                Transform found = FindNamedChild(parent.GetChild(i), childName);
+                if (found != null)
+                    return found;
+            }
+
+            return null;
+        }
+
+        private static GameObject EnsureDummyGrabbablePrefab() {
+            EnsureFolder(GrabPrefabsRoot);
+            GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(DummyGrabbablePrefabPath);
+            if (existing != null)
+                return existing;
+
+            GameObject item = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            item.name = "DummyGrabbable";
+            item.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
+            int interactableLayer = LayerMask.NameToLayer(InteractableLayers.Name);
+            if (interactableLayer >= 0)
+                item.layer = interactableLayer;
+
+            Rigidbody rigidbody = item.AddComponent<Rigidbody>();
+            rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+            rigidbody.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            rigidbody.mass = 1f;
+
+            item.AddComponent<NetworkIdentity>();
+            NetworkRigidbodyUnreliable networkBody = item.AddComponent<NetworkRigidbodyUnreliable>();
+            networkBody.syncDirection = SyncDirection.ServerToClient;
+            networkBody.target = item.transform;
+
+            Outline outline = item.AddComponent<Outline>();
+            outline.enabled = false;
+            outline.OutlineMode = Outline.Mode.OutlineVisible;
+            outline.OutlineColor = Color.yellow;
+            outline.OutlineWidth = 4f;
+
+            Grabbable grabbable = item.AddComponent<Grabbable>();
+            SerializedObject serialized = new SerializedObject(grabbable);
+            serialized.FindProperty("_rb").objectReferenceValue = rigidbody;
+            serialized.FindProperty("_networkBody").objectReferenceValue = networkBody;
+            serialized.FindProperty("_outline").objectReferenceValue = outline;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            PrefabUtility.SaveAsPrefabAsset(item, DummyGrabbablePrefabPath);
+            Object.DestroyImmediate(item);
+            return AssetDatabase.LoadAssetAtPath<GameObject>(DummyGrabbablePrefabPath);
+        }
+
+        private static void RegisterSpawnPrefab(GameObject prefab) {
+            if (prefab == null)
+                return;
+
+            string scenePath = ScenesRoot + "/" + SceneNames.Global + ".unity";
+            if (File.Exists(ToAbsolute(scenePath)) == false)
+                return;
+
+            Scene scene = OpenSceneIfNeeded(scenePath, out bool openedAdditive);
+            try {
+                ConnectionNetworkManager networkManager = FindInScene<ConnectionNetworkManager>(scene);
+                if (networkManager == null)
+                    return;
+
+                SerializedObject serialized = new SerializedObject(networkManager);
+                SerializedProperty list = serialized.FindProperty("spawnPrefabs");
+                for (int i = 0; i < list.arraySize; i++) {
+                    if (list.GetArrayElementAtIndex(i).objectReferenceValue == prefab)
+                        return;
+                }
+
+                list.arraySize += 1;
+                list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = prefab;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                EditorSceneManager.SaveScene(scene);
+            }
+            finally {
+                if (openedAdditive)
+                    EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        private static void EnsureLobbyGrabbable() {
+            EnsureLobbyGrabbable(AssetDatabase.LoadAssetAtPath<GameObject>(DummyGrabbablePrefabPath));
+        }
+
+        private static void EnsureLobbyGrabbable(GameObject prefab) {
+            if (prefab == null)
+                return;
+
+            string scenePath = ScenesRoot + "/" + SceneNames.Lobby + ".unity";
+            if (File.Exists(ToAbsolute(scenePath)) == false)
+                return;
+
+            Scene scene = OpenSceneIfNeeded(scenePath, out bool openedAdditive);
+            try {
+                Grabbable existing = FindInScene<Grabbable>(scene);
+                GameObject instance = existing != null ? existing.gameObject : null;
+                bool created = false;
+                if (instance == null) {
+                    instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
+                    instance.name = "DummyGrabbable";
+                    instance.transform.position = new Vector3(1.2f, 1.2f, 1.5f);
+                    created = true;
+                }
+
+                bool assignedId = EnsureSceneIdentity(instance);
+                if (created == false && assignedId == false)
+                    return;
+
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene);
+            }
+            finally {
+                if (openedAdditive)
+                    EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        private static Scene OpenSceneIfNeeded(string scenePath, out bool openedAdditive) {
+            for (int i = 0; i < SceneManager.sceneCount; i++) {
+                Scene loaded = SceneManager.GetSceneAt(i);
+                if (loaded.path != scenePath)
+                    continue;
+
+                openedAdditive = false;
+                return loaded;
+            }
+
+            openedAdditive = true;
+            return EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+        }
+
+        private static bool EnsureSceneIdentity(GameObject instance) {
+            NetworkIdentity identity = instance.GetComponent<NetworkIdentity>();
+            if (identity == null)
+                return false;
+
+            SerializedObject serialized = new SerializedObject(identity);
+            SerializedProperty sceneId = serialized.FindProperty("sceneId");
+            if (sceneId == null || sceneId.longValue != 0)
+                return false;
+
+            sceneId.longValue = (long)(uint)UnityEngine.Random.Range(1, int.MaxValue);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(identity);
+            return true;
+        }
+
+        private static T FindInScene<T>(Scene scene) where T : Object {
+            foreach (GameObject root in scene.GetRootGameObjects()) {
+                T found = root.GetComponentInChildren<T>(true);
+                if (found != null)
+                    return found;
+            }
+
+            return null;
         }
 
         private static void AssignPlayerCameraAnchor(GameObject player, PlayerCameraAnchor anchor) {
